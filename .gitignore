@@ -1,0 +1,77 @@
+# ==[ LOCAL WORKSPACE STATE ]==
+# Root metadata and workstation caches stay local.
+/.*/
+
+# ==[ BUILD OUTPUT ]==
+src/build_info.h
+analysis/
+ld/
+logs/
+build_test/
+_site/
+__pycache__/
+*.pyc
+*.elf
+*.map
+*.hex
+*.uf2
+
+# ==[ WORKSPACE-ONLY MATERIAL ]==
+# Development inputs and validation surfaces are not release payloads.
+assets/
+docs/
+rfc/
+sim/
+site/
+test/
+tools/
+captures/
+/?k??l?/
+*_builds/
+capture_*.py
+
+# Root scratch, validation receipts, notes, and changelogs.
+*.md
+!README.md
+*.txt
+*.json
+*.log
+*.diff
+*.patch
+*.bak
+*.old
+*.tmp
+*.zip
+
+# ==[ BUILD SCRIPTS ]==
+# A clean clone needs exactly the PlatformIO scripts referenced by platformio.ini.
+scripts/*
+!scripts/pre_build.py
+!scripts/nimble_iram_fix.py
+!scripts/quiet_lib_warnings.py
+
+# ==[ GENERATED MEDIA AND BINARIES ]==
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.wav
+*.mp3
+*.bin
+artifacts/
+tmp/
+
+# ==[ PUBLIC WIKI ]==
+!wiki/
+!wiki/*.md
+!wiki/images/
+!wiki/images/*.png
+
+# ==[ CURRENT PRODUCTION IMAGE ]==
+!firmware/
+!firmware/*.bin
+
+# ==[ LOCAL RELEASE SCRATCH ]==
+*_fix_files/
+zip_*/
+*_zip.ps1
