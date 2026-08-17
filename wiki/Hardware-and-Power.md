@@ -58,9 +58,15 @@ These are feedback and sensor capabilities, not evidence by themselves. A haptic
 The repository's `firmware/` directory contains one merged CoreS3 SE production image. It includes the board-correct bootloader, partition table, boot application, and firmware for a full write at address `0x0`. One file. Complete flash layout. No scavenger hunt across four offsets.
 
 - firmware version: `0.1.0-cores3se`
-- release revision embedded in the image: `v0.1.0`
+- source commit embedded in the image: `9000415`
 - artifact: [`hamlet-pancetta-v0.1.0-cores3se.bin`](../firmware/hamlet-pancetta-v0.1.0-cores3se.bin) (2,951,664 bytes)
-- SHA-256: `ad25f7d2ae420fc3f200f316a402b530783ef3954ea2e2678d459801b329e7a8`
+- SHA-256: `6ea3a494a19ca8675211765ad1d8e3b3be4d7d7c7044b396e3d88a3f4736b80b`
+
+The embedded commit identifies the source tree that produced the firmware.
+The repository commit carrying the resulting binary is necessarily its child:
+putting that future hash inside the image would change the image, the tree, and
+the hash again. The two hashes have different jobs. One names the code under
+test; the other files the evidence after the test.
 
 The image was structurally verified after merge. That receipt proves the artifact. It does not prove a flash, boot, visible screen, RF observation, or attached peripheral. The binary passed inspection. Your hardware has not yet been called as a witness.
 
