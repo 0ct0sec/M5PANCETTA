@@ -58,9 +58,9 @@ These are feedback and sensor capabilities, not evidence by themselves. A haptic
 The repository's `firmware/` directory contains one merged CoreS3 SE production image. It includes the board-correct bootloader, partition table, boot application, and firmware for a full write at address `0x0`. One file. Complete flash layout. No scavenger hunt across four offsets.
 
 - firmware version: `0.1.0-cores3se`
-- source commit embedded in the image: `9000415`
+- source commit embedded in the image: `99e78d8`
 - artifact: [`hamlet-pancetta-v0.1.0-cores3se.bin`](../firmware/hamlet-pancetta-v0.1.0-cores3se.bin) (2,951,664 bytes)
-- SHA-256: `6ea3a494a19ca8675211765ad1d8e3b3be4d7d7c7044b396e3d88a3f4736b80b`
+- SHA-256: `c07e802cf3b72b258c1c8f9ac1854d522b8c34a561165bbc5c69057249b53f35`
 
 The embedded commit identifies the source tree that produced the firmware.
 The repository commit carrying the resulting binary is necessarily its child:
