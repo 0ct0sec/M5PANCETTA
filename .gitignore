@@ -44,9 +44,10 @@ capture_*.py
 *.zip
 
 # ==[ BUILD SCRIPTS ]==
-# A clean clone needs exactly the PlatformIO scripts referenced by platformio.ini.
+# Keep the on-device build hooks and the release packager reproducible.
 scripts/*
 !scripts/pre_build.py
+!scripts/build_release.py
 !scripts/nimble_iram_fix.py
 !scripts/quiet_lib_warnings.py
 
