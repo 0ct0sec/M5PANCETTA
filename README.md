@@ -14,6 +14,16 @@ The repository ships a deliberately narrow release surface:
 
 CoreS3 SE is the primary production target. Core2 v1.1 remains the compatibility target. Both use a 320×240 touch display, 16 MiB flash, 8 MiB PSRAM, and onboard 2.4 GHz WiFi/BLE. Neither board has native 5 GHz, GPS, or LoRa; those capabilities require explicitly attached hardware.
 
+## Hardware and support
+
+These are referral links. A qualifying purchase may send a commission back to the project. That money buys boards, cables, and fresh opportunities for the serial console to explain what we misunderstood. The cat remains upper management.
+
+- [M5Stack CoreS3 SE](https://shop.m5stack.com/products/m5stack-cores3-se-iot-controller-w-o-battery-bottom?ref=xqezhcga) — the primary production target. No battery bottom. No native 5 GHz. No electrical fan fiction.
+- [M5Stack Core2 v1.3](https://shop.m5stack.com/products/m5stack-core2-esp32-iot-development-kit-v1-3?ref=xqezhcga) — the current retail Core2. It keeps the ESP32/AXP192 architecture and replaces the MPU6886 with a BMI270; this repository's documented compatibility evidence remains Core2 v1.1.
+- [Unit CardKB v1.1](https://shop.m5stack.com/products/cardkb-mini-keyboard-programmable-unit-v1-1-mega8a?ref=xqezhcga) — an optional 50-key I2C keyboard on Port A. On Core2 it goes dormant while the C5 bridge owns the shared pins. One bus. One owner. The smoke stays theoretical.
+
+Already equipped? [Keep the night shift caffeinated](https://buymeacoffee.com/0ct0). Purchase or pass; the license stays where it is. The source tree has no shopping-cart dependency because it already has enough state to manage.
+
 ## Production image
 
 The current [merged CoreS3 SE image](firmware/hamlet-pancetta-v0.1.0-cores3se.bin) and its source receipt are recorded on the [hardware and power page](wiki/Hardware-and-Power.md).
