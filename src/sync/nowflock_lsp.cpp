@@ -82,7 +82,16 @@ void observeWifiBle(CandidateState& c, bool isWifi, uint32_t nowMs, uint16_t bas
     bool newPass = c.lastPassBucket != bucket
         && c.lastSeenMs > 0
         && (nowMs - c.lastSeenMs) > MIN_PASS_GAP_MS;
-    if (!newMedium && !newPass && c.lastSeenMs > 0) {
+
+    // Compare the current sighting to the previous sighting of the other
+    // medium before updating either timestamp. Count at most one co-time pair
+    // per pass bucket so repeated table reads do not inflate pair_events.
+    bool cotime = isWifi
+        ? (hadBle && (nowMs - c.lastBleMs) <= COTIME_MS)
+        : (hadWifi && (nowMs - c.lastWifiMs) <= COTIME_MS);
+    bool newPair = cotime && (!c.hasPairBucket || c.lastPairBucket != bucket);
+
+    if (!newMedium && !newPass && !newPair && c.lastSeenMs > 0) {
         c.lastSeenMs = nowMs;
         c.authorizationCaps &= (uint16_t)~AUTH_STALE;
         refreshFlags(c);
@@ -106,19 +115,20 @@ void observeWifiBle(CandidateState& c, bool isWifi, uint32_t nowMs, uint16_t bas
 
     c.evidenceBits |= evidenceBits;
 
-    // The current medium was just stamped with nowMs. Compare it to the
-    // previous observation of the other medium using unsigned subtraction;
-    // this remains correct when millis() crosses 0x80000000 or wraps to zero.
-    bool cotime = isWifi
-        ? (hadBle && (nowMs - c.lastBleMs) <= COTIME_MS)
-        : (hadWifi && (nowMs - c.lastWifiMs) <= COTIME_MS);
-    if (c.wifiEvents > 0 && c.bleEvents > 0 && cotime && newMedium) {
+    if (newPair) {
         if (c.pairEvents < 65535u) ++c.pairEvents;
+        c.lastPairBucket = bucket;
+        c.hasPairBucket = true;
     }
 
-    bool paired = c.wifiEvents > 0 && c.bleEvents > 0 && (c.pairEvents > 0 || cotime);
+    bool paired = c.wifiEvents > 0 && c.bleEvents > 0 && c.pairEvents > 0;
     if (paired) {
-        c.evidenceBits |= NowFlock::EVID_COTILE | NowFlock::EVID_COTIME | NowFlock::EVID_SITE_COHERENT;
+        c.evidenceBits |= NowFlock::EVID_COTILE | NowFlock::EVID_COTIME;
+        if (c.gpsValid && (c.authorizationCaps & AUTH_STALE_GPS) == 0) {
+            c.evidenceBits |= NowFlock::EVID_SITE_COHERENT;
+        } else {
+            c.evidenceBits &= (uint16_t)~NowFlock::EVID_SITE_COHERENT;
+        }
         c.authorizationCaps &= (uint16_t)~(AUTH_SINGLE_MEDIUM | AUTH_NO_PAIR);
     } else {
         c.authorizationCaps |= AUTH_SINGLE_MEDIUM | AUTH_NO_PAIR;

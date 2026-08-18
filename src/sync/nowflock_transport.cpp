@@ -73,8 +73,10 @@ static uint16_t authFail = 0;
 static uint8_t controlChannel = DEFAULT_CONTROL_CHANNEL;
 static uint16_t reportIntervalS = 10;
 static uint8_t lastFrameType = 0;
-static bool peerReqPending = false;
-static uint8_t peerReqMinTier = 2;
+static bool peerReqTxPending = false;
+static bool sightingResponsePending = false;
+static constexpr uint8_t LOCAL_PEER_REQ_MIN_TIER = 2;
+static uint8_t sightingResponseMinTier = 2;
 static SwarmTarget lastSwarmTarget = {};
 static char lastCaptureAnnotation[NowFlock::CAPTURE_LINE_MAX + 1] = {};
 static uint32_t lastExportMs = 0;
@@ -105,12 +107,12 @@ static uint8_t batteryPct() {
 }
 
 static uint32_t utcEpochMin() {
-    if (Config::hasTrustedClock()) {
-        uint32_t epoch = Config::getTrustedEpoch();
-        if (epoch) return epoch / 60u;
-    }
     if (GPS::hasFix()) {
         uint32_t epoch = GPS::getEpochUtc();
+        if (epoch) return epoch / 60u;
+    }
+    if (Config::hasTrustedClock()) {
+        uint32_t epoch = Config::getTrustedEpoch();
         if (epoch) return epoch / 60u;
     }
     return 0;
@@ -311,6 +313,7 @@ static void sendAssign(uint32_t now) {
     uint16_t claimed = NowFlockState::unionClaimedChannels(now);
     ab.channelMask = (uint16_t)(ALL_CHANNELS_MASK & ~claimed);
     if (ab.channelMask == 0) ab.channelMask = ALL_CHANNELS_MASK;
+    channelMask = ab.channelMask;
     ab.utcEpochMin = utcEpochMin();
     ab.masterNodeId = nodeId;
     encodeAssignBody(ab, body);
@@ -331,10 +334,10 @@ static void sendSync(uint32_t now) {
 static void sendPeerReq(uint32_t now) {
     uint8_t body[PEER_REQ_BODY_SIZE];
     PeerReqBody pr;
-    pr.minTier = peerReqMinTier;
+    pr.minTier = LOCAL_PEER_REQ_MIN_TIER;
     encodePeerReqBody(pr, body);
     if (sendFrame(TYPE_PEER_REQ, body, sizeof(body))) {
-        peerReqPending = false;
+        peerReqTxPending = false;
     }
     (void)now;
 }
@@ -395,8 +398,11 @@ static void updateBleHeartbeat(uint32_t now) {
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
     if (pAdv->isAdvertising()) pAdv->stop();
     pAdv->setAdvertisementData(advData);
-    pAdv->setMinInterval(0x20);
-    pAdv->setMaxInterval(0x40);
+    pAdv->setAdvertisementType(BLE_GAP_CONN_MODE_NON);
+    pAdv->setScanResponse(false);
+    // NimBLE intervals use 0.625 ms units: 0x0640 = 1000 ms.
+    pAdv->setMinInterval(0x0640);
+    pAdv->setMaxInterval(0x0640);
     pAdv->start(0);
     bleHeartbeatOwnsAdvertising = true;
 }
@@ -408,8 +414,12 @@ static void updateBleHeartbeat(uint32_t) {}
 static void sendSighting(uint32_t now) {
     CandidateWire rows[SIGHTING_MAX_CANDIDATES];
     uint8_t count = NowFlockGraph::encodeTopCandidates(rows, SIGHTING_MAX_CANDIDATES, now,
-                                                         peerReqPending ? peerReqMinTier : 2);
-    if (count == 0 && !peerReqPending) return;
+                                                         sightingResponsePending ? sightingResponseMinTier : 2);
+    if (count == 0) {
+        // PEER_REQ only requires a response when a matching candidate exists.
+        sightingResponsePending = false;
+        return;
+    }
 
     uint8_t body[CANDIDATE_BODY_SIZE + SIGHTING_MAX_CANDIDATES * CANDIDATE_WIRE_SIZE] = {};
     body[0] = count;
@@ -421,7 +431,7 @@ static void sendSighting(uint32_t now) {
     }
     if (sendFrame(TYPE_SIGHTING, body, CANDIDATE_BODY_SIZE + count * CANDIDATE_WIRE_SIZE)) {
         lastSightingMs = now;
-        peerReqPending = false;
+        sightingResponsePending = false;
     }
 }
 
@@ -468,6 +478,8 @@ static void handleDecoded(const Header& hdr, const uint8_t* body, uint32_t now) 
     if (hdr.type == TYPE_ASSIGN) {
         AssignBody ab;
         if (!decodeAssignBody(body, hdr.bodyLen, ab)) return;
+        if (hdr.role != ROLE_MASTER || ab.masterNodeId != hdr.nodeId ||
+            ab.controlChannel < 1 || ab.controlChannel > 13) return;
         NowFlockState::noteAssign(hdr.nodeId, hdr, now);
         if (ab.masterNodeId > nodeId || masterNodeId == 0) {
             masterNodeId = ab.masterNodeId;
@@ -477,7 +489,8 @@ static void handleDecoded(const Header& hdr, const uint8_t* body, uint32_t now) 
                 haveBroadcastPeer.store(false, std::memory_order_relaxed);
             }
             reportIntervalS = ab.reportIntervalS < 2 ? 2 : (ab.reportIntervalS > 60 ? 60 : ab.reportIntervalS);
-            channelMask = ab.channelMask ? ab.channelMask : ALL_CHANNELS_MASK;
+            channelMask = (uint16_t)(ab.channelMask & ALL_CHANNELS_MASK);
+            if (channelMask == 0) channelMask = ALL_CHANNELS_MASK;
             if (ab.utcEpochMin > 0 && !GPS::hasFix() && !Config::hasTrustedClock()) {
                 Config::adoptSyncEpochMin(ab.utcEpochMin, hdr.uptimeMs, now);
             }
@@ -502,11 +515,10 @@ static void handleDecoded(const Header& hdr, const uint8_t* body, uint32_t now) 
     } else if (hdr.type == TYPE_PEER_REQ) {
         PeerReqBody pr;
         if (!decodePeerReqBody(body, hdr.bodyLen, pr)) return;
-        NowFlockState::Peer* p = NowFlockState::findPeer(hdr.nodeId);
-        if (p && (now - p->lastPeerReqMs) >= HELLO_INTERVAL_MS) {
-            p->lastPeerReqMs = now;
-            peerReqMinTier = pr.minTier ? pr.minTier : 2;
-            peerReqPending = true;
+        if (pr.minTier <= 4 &&
+            NowFlockState::acceptPeerRequest(hdr.nodeId, now, HELLO_INTERVAL_MS)) {
+            sightingResponseMinTier = pr.minTier;
+            sightingResponsePending = true;
         }
     } else if (hdr.type == TYPE_TARGET) {
         TargetBody tb;
@@ -623,7 +635,7 @@ void markEspNowNeedsReinit() {
 }
 
 void requestPeerSummaries() {
-    peerReqPending = true;
+    peerReqTxPending = true;
 }
 
 void update() {
@@ -662,10 +674,10 @@ void updateBackground() {
     if (isMaster && (now - lastSyncMs) >= SYNC_INTERVAL_MS) {
         sendSync(now);
     }
-    if (peerReqPending) {
+    if (peerReqTxPending) {
         sendPeerReq(now);
     }
-    if ((now - lastSightingMs) >= (uint32_t)reportIntervalS * 1000u || peerReqPending) {
+    if ((now - lastSightingMs) >= (uint32_t)reportIntervalS * 1000u || sightingResponsePending) {
         sendSighting(now);
     }
     if (NowFlockExport::enabled() && (now - lastExportMs) >= (uint32_t)reportIntervalS * 1000u) {
@@ -680,7 +692,7 @@ void setClaimedChannels(uint16_t mask) {
 
 void noteHuntChannel(uint8_t channel) {
     if (channel >= 1 && channel <= 13) {
-        localClaimedChannels |= (uint16_t)(1u << channel);
+        localClaimedChannels = (uint16_t)(1u << channel);
     }
 }
 

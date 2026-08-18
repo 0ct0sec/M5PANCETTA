@@ -1254,6 +1254,7 @@ void stop() {
     }
 
     // Mark ESP-NOW for reinitialization (WiFi was stopped)
+    NowFlock::setClaimedChannels(0);
     NowFlock::markEspNowNeedsReinit();
 
     // ==[ SD SESSION DUMP ]== read networks BEFORE freeing PSRAM
@@ -2112,6 +2113,7 @@ static bool initWiFiPromiscuous() {
         HAMLET_LOGF("[HUNT] channel set ch1 failed: 0x%x\n", err);
     } else {
         currentChannel = 1;
+        NowFlock::noteHuntChannel(currentChannel);
     }
     return true;
 }
@@ -3834,7 +3836,9 @@ static int8_t getLurkBestRSSI(uint32_t now) {
 static bool channelAllowedByFlock(uint8_t ch) {
     if (ch < 1 || ch > 13) return false;
     NowFlock::Status st = NowFlock::getStatus();
-    if (!st.initialized || st.channelMask == 0) return true;
+    // Hunt intentionally tears down ESP-NOW before taking the shared radio,
+    // but the last valid FNOW assignment remains the session policy.
+    if (!st.enabled || st.channelMask == 0) return true;
     return (st.channelMask & (uint16_t)(1u << ch)) != 0;
 }
 
@@ -4427,6 +4431,7 @@ static bool processRetryQueue() {
                 HAMLET_LOGF("[HUNT] channel set ch%d failed: 0x%x\n", net->channel, err);
             } else {
                 currentChannel = net->channel;
+                NowFlock::noteHuntChannel(currentChannel);
             }
 
             // Motion-aware retry burst (avoid detection threshold: 3 frames/2s)

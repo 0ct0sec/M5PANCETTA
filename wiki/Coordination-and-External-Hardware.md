@@ -16,9 +16,9 @@ FNOW/3 exchanges bounded status. It is not encryption. It is not a capture tunne
 
 ### Optional PIGBROTHER export
 
-PIGBROTHER snapshot export is a separate opt-in profile. When armed, wardrive rows can include uncoarsened E7 coordinate values, channel, RSSI, authentication token, timestamp, and hashed SSID/BSSID values for peer ingestion and SD replay.
+PIGBROTHER snapshot export is a separate opt-in profile. When armed, wardrive rows carry 50 m-grid E7 coordinates, channel, RSSI, authentication token, timestamp, and hashed SSID/BSSID values for peer ingestion and SD replay. The first-party Wardrive CSV retains its own configured precision; FNOW does not put that route precision on the peer wire.
 
-Hashed identifiers are pseudonymous, not anonymous. Snapshot coordinates retain the full E7 values supplied by the route; storage resolution is not a promise of GPS accuracy. Enable the profile only when every participant and handling path is authorized. Hashing changed the representation. It did not erase the sensitivity.
+Hashed identifiers are pseudonymous, not anonymous. Snapshot coordinates retain E7 integer encoding but are rounded to the FNOW 50 m grid; grid resolution is not a promise of GPS accuracy. Enable the profile only when every participant and handling path is authorized. Hashing and coarsening changed the representation. They did not erase the sensitivity.
 
 Group tags, report cadence, PIGBROTHER profiles, and the optional BLE transmitter are documented under [`N0W F0CK`](Operator-Configuration.md#n0w-f0ck).
 

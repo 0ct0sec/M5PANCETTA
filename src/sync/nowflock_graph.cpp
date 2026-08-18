@@ -9,6 +9,8 @@ struct Candidate {
     bool local = false;
     uint32_t originNodeId = 0;
     uint32_t peerSeenMask = 0;
+    uint32_t wifiHash = 0;
+    uint32_t bleHash = 0;
     NowFlockLsp::CandidateState lsp{};
 };
 
@@ -42,13 +44,18 @@ static int findLocalByTile(int32_t lat, int32_t lon) {
 }
 
 static int findMergeableByTile(uint32_t peerNodeId, int32_t lat, int32_t lon) {
+    int peerMatch = -1;
     for (uint8_t i = 0; i < MAX_CANDIDATES; ++i) {
         if (!table[i].used) continue;
         if (table[i].lsp.tileLatE7 != lat || table[i].lsp.tileLonE7 != lon) continue;
+        // Prefer locally observed evidence over a provisional peer-only row.
+        // That ensures later corroboration reaches the candidate whose export
+        // eligibility is grounded in this node's own radios.
+        if (table[i].local) return i;
         if (!table[i].local && table[i].originNodeId == peerNodeId) continue;
-        return i;
+        if (peerMatch < 0) peerMatch = i;
     }
-    return -1;
+    return peerMatch;
 }
 
 static int findFreeOrWeakest() {
@@ -114,7 +121,8 @@ uint8_t exportableCount() {
 
 void observeLocal(bool isWifi, uint32_t nowMs, int32_t tileLatE7, int32_t tileLonE7,
                   uint32_t wifiHash, uint32_t bleHash, uint16_t baseScore, uint8_t baseConfidence,
-                  uint16_t evidenceBits, bool gpsValid, bool staleGps) {
+                  uint16_t evidenceBits, bool gpsValid, bool staleGps,
+                  bool utcValid, uint16_t observationCaps) {
     int idx = findLocalByTile(tileLatE7, tileLonE7);
     if (idx < 0) {
         idx = findFreeOrWeakest();
@@ -125,6 +133,8 @@ void observeLocal(bool isWifi, uint32_t nowMs, int32_t tileLatE7, int32_t tileLo
         c.originNodeId = 0;
         c.lsp.tileLatE7 = tileLatE7;
         c.lsp.tileLonE7 = tileLonE7;
+        c.wifiHash = wifiHash;
+        c.bleHash = bleHash;
         c.lsp.candidateId = NowFlockLsp::candidateId(tileLatE7, tileLonE7, wifiHash, bleHash);
         c.lsp.gpsValid = gpsValid;
         c.lsp.lastPassBucket = NowFlockLsp::passBucket(nowMs);
@@ -133,17 +143,34 @@ void observeLocal(bool isWifi, uint32_t nowMs, int32_t tileLatE7, int32_t tileLo
     }
 
     Candidate& c = table[idx];
+    if (c.wifiHash == 0 && wifiHash != 0) c.wifiHash = wifiHash;
+    if (c.bleHash == 0 && bleHash != 0) c.bleHash = bleHash;
+    c.lsp.candidateId = NowFlockLsp::candidateId(
+        tileLatE7, tileLonE7, c.wifiHash, c.bleHash);
     c.lsp.gpsValid = gpsValid;
     if (!gpsValid) c.lsp.authorizationCaps |= NowFlockLsp::AUTH_NO_GPS;
     else c.lsp.authorizationCaps &= (uint16_t)~NowFlockLsp::AUTH_NO_GPS;
     if (staleGps) c.lsp.authorizationCaps |= NowFlockLsp::AUTH_STALE_GPS;
     else c.lsp.authorizationCaps &= (uint16_t)~NowFlockLsp::AUTH_STALE_GPS;
+    if (!utcValid) c.lsp.authorizationCaps |= NowFlockLsp::AUTH_NO_UTC;
+    else c.lsp.authorizationCaps &= (uint16_t)~NowFlockLsp::AUTH_NO_UTC;
+    c.lsp.authorizationCaps |= observationCaps;
 
     NowFlockLsp::observeWifiBle(c.lsp, isWifi, nowMs, baseScore, baseConfidence, evidenceBits);
 }
 
 void ingestPeerCandidate(uint32_t peerNodeId, const NowFlock::CandidateWire& row, uint32_t nowMs) {
-    int idx = findMergeableByTile(peerNodeId, row.tileLatE7, row.tileLonE7);
+    if (row.candidateId == 0 ||
+        row.tileLatE7 < -900000000 || row.tileLatE7 > 900000000 ||
+        row.tileLonE7 < -1800000000 || row.tileLonE7 > 1800000000) {
+        return;
+    }
+    // Never retransmit sub-grid coordinates supplied by a buggy or hostile
+    // peer. Candidate IDs remain opaque; cross-node identity is the normalized
+    // 50 m tile only.
+    int32_t tileLatE7 = NowFlockLsp::quantizeTileE7(row.tileLatE7);
+    int32_t tileLonE7 = NowFlockLsp::quantizeTileE7(row.tileLonE7);
+    int idx = findMergeableByTile(peerNodeId, tileLatE7, tileLonE7);
 
     if (idx >= 0) {
         Candidate& merged = table[idx];
@@ -155,7 +182,9 @@ void ingestPeerCandidate(uint32_t peerNodeId, const NowFlock::CandidateWire& row
             uint32_t boosted = (uint32_t)merged.lsp.siteScore + boost;
             merged.lsp.siteScore = boosted > 1000u ? 1000u : (uint16_t)boosted;
         }
-        merged.lsp.lastSeenMs = nowMs;
+        // A peer report can corroborate local evidence, but it cannot refresh
+        // the local-radio freshness clock or keep an export gate alive.
+        if (!merged.local) merged.lsp.lastSeenMs = nowMs;
         NowFlockLsp::refreshFlags(merged.lsp);
         corroborated = true;
         return;
@@ -168,14 +197,15 @@ void ingestPeerCandidate(uint32_t peerNodeId, const NowFlock::CandidateWire& row
     c.local = false;
     c.originNodeId = peerNodeId;
     c.lsp.candidateId = row.candidateId;
-    c.lsp.tileLatE7 = row.tileLatE7;
-    c.lsp.tileLonE7 = row.tileLonE7;
-    c.lsp.siteScore = row.siteScore;
-    c.lsp.evidenceBits = (uint16_t)(row.evidenceBits | NowFlock::EVID_PEER_CORROBORATION);
-    c.lsp.authorizationCaps = row.authorizationCaps;
+    c.lsp.tileLatE7 = tileLatE7;
+    c.lsp.tileLonE7 = tileLonE7;
+    c.lsp.siteScore = row.siteScore > 1000u ? 1000u : row.siteScore;
+    c.lsp.evidenceBits = (uint16_t)((row.evidenceBits & 0x07FFu) |
+                                    NowFlock::EVID_PEER_CORROBORATION);
+    c.lsp.authorizationCaps = (uint16_t)(row.authorizationCaps & 0x00FFu);
     c.lsp.wifiEvents = row.wifiEvents;
     c.lsp.bleEvents = row.bleEvents;
-    c.lsp.confidence = row.confidence;
+    c.lsp.confidence = row.confidence > 100u ? 100u : row.confidence;
     c.lsp.lastSeenMs = nowMs;
     c.lsp.packedFlags = (uint8_t)(row.packedFlags & ~0x80u);
     c.peerSeenMask = (1u << peerBit(peerNodeId));

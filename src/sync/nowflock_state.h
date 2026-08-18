@@ -16,6 +16,7 @@ struct Peer {
     uint32_t lastSeenMs;
     uint32_t lastSightingMs;
     uint32_t lastPeerReqMs;
+    bool hasPeerReq;      // request time 0 is valid; keep rate-limit state explicit
     uint16_t sightingRx;
     uint8_t role;
     uint8_t batteryPct;
@@ -42,6 +43,7 @@ void reset();
 Peer* upsertPeer(uint32_t nodeId, uint32_t nowMs);
 Peer* findPeer(uint32_t nodeId);
 bool acceptSequence(uint32_t nodeId, uint16_t seq, uint32_t nowMs);
+bool acceptPeerRequest(uint32_t nodeId, uint32_t nowMs, uint32_t rateLimitMs);
 uint8_t activePeerCount(uint32_t nowMs);
 uint8_t getActivePeers(PeerView* out, uint8_t maxRows, uint32_t nowMs);
 uint32_t highestActiveNodeId(uint32_t nowMs, uint32_t ownNodeId);

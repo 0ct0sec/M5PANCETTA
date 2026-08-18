@@ -52,14 +52,27 @@ Peer* upsertPeer(uint32_t nodeId, uint32_t nowMs) {
 }
 
 bool acceptSequence(uint32_t nodeId, uint16_t seq, uint32_t nowMs) {
-    Peer* p = upsertPeer(nodeId, nowMs);
-    if (!p) return false;
-    if (p->hasSeq && !NowFlock::seqIsFresh(seq, p->lastSeq)) {
+    // A replay is not evidence that a peer is still alive. Check freshness
+    // before upsertPeer() refreshes lastSeenMs, otherwise a captured frame can
+    // pin stale peers in election and channel-allocation state indefinitely.
+    Peer* p = findPeer(nodeId);
+    if (p && p->hasSeq && !NowFlock::seqIsFresh(seq, p->lastSeq)) {
         return false;
     }
+    if (!p) p = upsertPeer(nodeId, nowMs);
+    if (!p) return false;
     p->lastSeq = seq;
     p->hasSeq = true;
     p->lastSeenMs = nowMs;
+    return true;
+}
+
+bool acceptPeerRequest(uint32_t nodeId, uint32_t nowMs, uint32_t rateLimitMs) {
+    Peer* p = findPeer(nodeId);
+    if (!p) return false;
+    if (p->hasPeerReq && (nowMs - p->lastPeerReqMs) < rateLimitMs) return false;
+    p->lastPeerReqMs = nowMs;
+    p->hasPeerReq = true;
     return true;
 }
 

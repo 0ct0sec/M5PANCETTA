@@ -1,5 +1,6 @@
 #include "nowflock_export.h"
 #include "nowflock_protocol.h"
+#include "nowflock_lsp.h"
 #include "../core/config.h"
 #include "../hal/sd_storage.h"
 #include <stdlib.h>
@@ -110,12 +111,17 @@ void onWardriveRow(const uint8_t* bssid, const char* ssid, uint8_t channel, int8
     uint32_t bssidHash = hashMac(bssid);
     uint32_t ssidHash = hashSsid(ssid);
     uint32_t ts = epochS ? epochS : nowMs / 1000u;
+    // EXPORT_SNAPSHOT crosses the FNOW boundary. Keep first-party Wardrive
+    // precision in its own CSV; peer replay gets the same 50 m grid used by
+    // SIGHTING so exact route coordinates never ride the coordination frame.
+    int32_t coarseLatE7 = NowFlockLsp::quantizeTileE7(latE7);
+    int32_t coarseLonE7 = NowFlockLsp::quantizeTileE7(lonE7);
     int n = snprintf(line, sizeof(line),
         "profile=%s,kind=wifi,ts=%lu,lat_e7=%ld,lon_e7=%ld,ssid_hash=%08lX,bssid_hash=%08lX,channel=%u,rssi=%d,auth=%s",
         profileToken(),
         (unsigned long)ts,
-        (long)latE7,
-        (long)lonE7,
+        (long)coarseLatE7,
+        (long)coarseLonE7,
         (unsigned long)ssidHash,
         (unsigned long)bssidHash,
         (unsigned)channel,

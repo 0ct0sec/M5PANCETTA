@@ -38,6 +38,7 @@ void ingestPeerCandidate(uint32_t peerNodeId, const NowFlock::CandidateWire& row
 bool hasCorroboration();
 void observeLocal(bool isWifi, uint32_t nowMs, int32_t tileLatE7, int32_t tileLonE7,
                   uint32_t wifiHash, uint32_t bleHash, uint16_t baseScore, uint8_t baseConfidence,
-                  uint16_t evidenceBits, bool gpsValid, bool staleGps);
+                  uint16_t evidenceBits, bool gpsValid, bool staleGps,
+                  bool utcValid = true, uint16_t observationCaps = 0);
 
 } // namespace NowFlockGraph

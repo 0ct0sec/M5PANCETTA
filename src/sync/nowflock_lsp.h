@@ -19,6 +19,8 @@ static constexpr uint16_t AUTH_NO_PAIR = 1u << 5;
 static constexpr uint16_t AUTH_STALE = 1u << 6;
 static constexpr uint16_t AUTH_NO_GPS = 1u << 0;
 static constexpr uint16_t AUTH_STALE_GPS = 1u << 1;
+static constexpr uint16_t AUTH_RANDOMIZED_BLE = 1u << 4;
+static constexpr uint16_t AUTH_NO_UTC = 1u << 7;
 
 static constexpr uint8_t TIER_MEDIUM = 2u;
 static constexpr uint8_t STATE_DECAYED = 5u;
@@ -40,6 +42,8 @@ struct CandidateState {
     // co-time pairing correct across the millis() sign bit and full wrap.
     uint32_t lastWifiMs = 0;
     uint32_t lastBleMs = 0;
+    uint16_t lastPairBucket = 0;
+    bool hasPairBucket = false;
     uint16_t lastPassBucket = 0;
     bool gpsValid = false;
     bool exportable = false;
