@@ -6,6 +6,8 @@ The handheld owns one onboard 2.4 GHz Wi-Fi/BLE radio. FLOCKNOW coordinates comp
 
 ## FLOCKNOW / FNOW/3
 
+Normative reference: [RFC-F0690-v3 — NOWFLOCK Peer Coordination Protocol](../rfc/NOWFLOCK_STANDARD.md). The specification text is openly published under CC BY 4.0, so anyone may implement, adapt, or redistribute FNOW/3—including in commercial projects. Copied or adapted RFC text keeps attribution and identifies changes; compatible implementations owe no protocol fee. The RFC is open. The radios still require an authorized operator.
+
 FLOCKNOW is a bounded ESP-NOW coordination protocol. Peers advertise status, elect a coordinator, assign control/channel policy, exchange sightings, request summaries, synchronize time references, and occupy up to 20 peer slots. Every frame fits inside ESP-NOW's 250-byte limit. The packet budget is not a suggestion. The radio has reviewed the pull request.
 
 The Wi-Fi callback uses fixed-capacity staging. It does not allocate memory, write storage, render UI, or begin a second career as the main loop. Callback context receives bytes and fills a bounded mailbox. Deferred code gets the expensive thoughts.

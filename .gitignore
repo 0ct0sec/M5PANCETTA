@@ -62,7 +62,11 @@ scripts/*
 artifacts/
 tmp/
 
-# ==[ PUBLIC WIKI ]==
+# ==[ PUBLIC DOCUMENTATION ]==
+!rfc/
+!rfc/README.md
+!rfc/NOWFLOCK_STANDARD.md
+!rfc/NOWFLOCK_CHANGELOG.md
 !wiki/
 !wiki/*.md
 !wiki/images/

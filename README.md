@@ -6,9 +6,12 @@ Portable WiFi and Bluetooth Low Energy security-research firmware for M5Stack Co
 
 HAMLET PANCETTA observes the 2.4 GHz band, collects authorized WiFi evidence, tracks defensive WiFi/BLE indicators, writes coordinate-backed field records, exports captures, and works with optional C5, GPS, and Meshtastic hardware. The [capability wiki](wiki/Home.md) explains what each subsystem does, what it transmits, and where its evidence stops being certain.
 
+Its peer layer implements the openly published [RFC-F0690-v3: NOWFLOCK Peer Coordination Protocol](rfc/NOWFLOCK_STANDARD.md). The specification text is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): anyone may read, copy, adapt, redistribute, and implement FNOW/3, including commercially. Copied or adapted specification text keeps attribution and marks changes; compatible implementations owe no protocol fee. That openness covers the RFC, not separately copyrighted firmware, and it still does not turn radio capability into authorization. The packet escaped. The warranty paperwork did not.
+
 The repository ships a deliberately narrow release surface:
 
 - essential firmware and build source;
+- the open RFC-F0690-v3 specification and revision history;
 - the capability-only wiki and its commissioned illustrations;
 - one current merged CoreS3 SE production binary.
 
