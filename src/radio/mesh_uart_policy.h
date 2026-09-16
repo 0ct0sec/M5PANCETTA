@@ -73,6 +73,12 @@ static constexpr uint8_t RX_PIN = 18;  // Port.C RX (M-Bus 15)
 static constexpr uint8_t TX_PIN = 17;  // Port.C TX (M-Bus 16)
 static constexpr uint8_t RX_PINS[] = {18, 8};
 static constexpr uint8_t TX_PINS[] = {17, 9};
+#elif HAMLET_TARGET_TAB5
+static constexpr uint8_t UART_NUM = 1;
+static constexpr uint8_t RX_PIN = 5;   // Port.B
+static constexpr uint8_t TX_PIN = 6;
+static constexpr uint8_t RX_PINS[] = {5, 7};
+static constexpr uint8_t TX_PINS[] = {6, 8};
 #else
 static constexpr uint8_t UART_NUM = 1;
 static constexpr uint8_t RX_PIN = 13;  // Port.C RX

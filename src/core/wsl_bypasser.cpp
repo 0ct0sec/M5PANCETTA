@@ -12,11 +12,14 @@
 
 extern "C" {
 
+#if !defined(CONFIG_IDF_TARGET_ESP32P4)
 // Override sanity check; -zmuldefs makes this beat libnet80211.a
+// P4 hosted C6 has no libnet80211 to override; raw TX still calls esp_wifi_80211_tx.
 int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
     // always allow
     return 0;
 }
+#endif
 
 }
 

@@ -63,6 +63,9 @@ bool isTouchingPig(int16_t tx, int16_t ty);
 // any display-area touch contact this frame (for dim reset)
 bool wasTouched();
 
+// Tab5 house tap: 0xFF when the gesture did not start on the building.
+uint8_t houseRoomHit();
+
 }  // namespace Touch
 
 #endif  // TOUCH_H

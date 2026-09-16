@@ -20,6 +20,7 @@
 #include "../core/capture.h"
 #include "../core/config.h"
 #include "../core/item_drops.h"
+#include "../hal/platform.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -230,6 +231,9 @@ void enter() {
     initMenuState(true);
     NpcEvents::init();
     MenuPig::enter();
+#if HAMLET_TARGET_TAB5
+    MenuPig::startRoaming();
+#endif
     draw();
 }
 
@@ -245,7 +249,9 @@ void onInput() {
     if (NpcEvents::isActive()) return;
     if (MenuPig::isMenuTransitionLocked()) return;
     if (!menuVisible) {
+#if !HAMLET_TARGET_TAB5
         MenuPig::returnToHelper();
+#endif
         menuVisible = true;
     }
 }
@@ -370,7 +376,9 @@ bool back() {
 void update() {
     uint32_t now = millis();
 
-    // Idle timeout -> start roaming
+    // Idle timeout -> start roaming. Tab5 keeps the launcher in chrome while
+    // the pig always lives in the house; hiding the list would empty the pane.
+#if !HAMLET_TARGET_TAB5
     uint32_t timeout = kIdleTimeoutMs;
     if (menuVisible && !MenuPig::isRoaming() &&
         !MenuPig::isMenuTransitionLocked() &&
@@ -378,6 +386,12 @@ void update() {
         menuVisible = false;
         MenuPig::startRoaming();
     }
+#else
+    if (!MenuPig::isRoaming() && !MenuPig::isMenuTransitionLocked()) {
+        MenuPig::startRoaming();
+    }
+    menuVisible = true;
+#endif
 
     MenuPig::setEventHold(NpcEvents::isActive());
     MenuPig::update(now);
@@ -485,9 +499,14 @@ static void draw() {
             }
         }
     } else {
-        // ==[ ROAMING ]== pig in rooms, no menu
+        // ==[ ROAMING ]== pig in rooms, no menu. Tab5 draws the house in the
+        // compositor; this canvas stays the chrome tool surface.
+#if HAMLET_TARGET_TAB5
+        NpcEvents::draw(*canvas);
+#else
         MenuPig::drawRoaming(*canvas);
         NpcEvents::draw(*canvas);
+#endif
     }
 
     Display::drawUiOverlaysTo(canvas);

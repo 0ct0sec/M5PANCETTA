@@ -50,7 +50,7 @@ static uint8_t deferredCount = 0;
 
 // ==[ SD PIN ]==
 static const uint32_t SD_SPI_FREQ = 25000000;  // 25MHz safe clock
-#if HAMLET_TARGET_CORES3SE
+#if HAMLET_TARGET_CORES3SE || HAMLET_TARGET_TAB5
 static bool sdBusStarted = false;
 #endif
 
@@ -76,7 +76,7 @@ static const uint8_t DIR_COUNT = sizeof(DIRS) / sizeof(DIRS[0]);
 
 static bool tryMount() {
     if (mounted) return true;
-#if HAMLET_TARGET_CORES3SE
+#if HAMLET_TARGET_CORES3SE || HAMLET_TARGET_TAB5
     if (!sdBusStarted) {
         SPI.begin(HAMLET_SD_SCLK_PIN,
                   HAMLET_SD_MISO_PIN,

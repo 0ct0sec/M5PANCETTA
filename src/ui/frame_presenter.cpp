@@ -1,6 +1,10 @@
 #include "frame_presenter.h"
 
 #include "frame_diff.h"
+#include "../hal/platform.h"
+#if HAMLET_TARGET_TAB5
+#include "tab5_compositor.h"
+#endif
 #include <esp_heap_caps.h>
 #include <string.h>
 
@@ -95,6 +99,10 @@ bool init() {
 }
 
 void present(M5Canvas& canvas) {
+#if HAMLET_TARGET_TAB5
+    Tab5Compositor::present(canvas);
+    return;
+#endif
     if (!initialized) init();
     if (!optimized || canvas.width() != FrameDiff::kWidth ||
         canvas.height() != FrameDiff::kHeight || !canvas.getBuffer()) {
@@ -168,6 +176,9 @@ void present(M5Canvas& canvas) {
 }
 
 void invalidate() {
+#if HAMLET_TARGET_TAB5
+    Tab5Compositor::invalidate();
+#endif
     if (initialized && optimized) M5.Display.waitDMA();
     hashHistoryValid = false;
 }

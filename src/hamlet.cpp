@@ -30,6 +30,7 @@
 #include "ui/scene_cache.h"
 #include "ui/menu.h"
 #include "ui/menu_pig.h"
+#include "ui/house_map.h"
 #include "ui/teleport.h"
 #include "ui/loot_menu.h"
 #include "ui/feeding_menu.h"
@@ -1155,6 +1156,10 @@ void init() {
     // ==[ BOOT BARK ]== emit phrase after intro handoff
     Mood::onBoot();
 
+#if HAMLET_TARGET_TAB5
+    // House is the home screen. Launcher lives in the chrome pane.
+    enterMode(HamletMode::MENU);
+#else
     // ==[ IDLE ENTRY ]== drop into home screen
     enterMode(HamletMode::IDLE);
 
@@ -1176,6 +1181,7 @@ void init() {
                                    (float)dstX, (float)dstY, millis(),
                                    avatarTeleportSilhouette());
     }
+#endif
 }
 
 void update() {
@@ -1932,6 +1938,27 @@ static void updateTouch(uint32_t now) {
         }
 
         case HamletMode::MENU: {
+#if HAMLET_TARGET_TAB5
+            const uint8_t houseRoom = Touch::houseRoomHit();
+            if (houseRoom != 0xFF) {
+                if (g == Touch::Gesture::TAP) {
+                    MenuPig::followRoom(houseRoom);
+                    Haptic::tick();
+                    break;
+                }
+                HouseMap::Dir dir = HouseMap::Dir::None;
+                if (g == Touch::Gesture::SWIPE_LEFT) dir = HouseMap::Dir::Left;
+                else if (g == Touch::Gesture::SWIPE_RIGHT) dir = HouseMap::Dir::Right;
+                else if (g == Touch::Gesture::SWIPE_UP) dir = HouseMap::Dir::Up;
+                else if (g == Touch::Gesture::SWIPE_DOWN) dir = HouseMap::Dir::Down;
+                if (dir != HouseMap::Dir::None) {
+                    const int8_t nb = HouseMap::neighbor(MenuPig::getCurrentRoom(), dir);
+                    if (nb >= 0) MenuPig::followRoom((uint8_t)nb);
+                    Haptic::tick();
+                }
+                break;
+            }
+#endif
             if (Menu::isMenuHidden()) {
                 if (Menu::hasActiveEncounter()) {
                     if (g == Touch::Gesture::TAP && z == Touch::Zone::PLAYFIELD) {

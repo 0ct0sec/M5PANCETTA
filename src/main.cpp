@@ -15,6 +15,7 @@
 #include "core/frame_budget.h"
 #include "hal/hal_esp32.h"
 #include "hal/platform.h"
+#include "hal/tab5_board.h"
 
 static HalESP32 hardwareHal;
 
@@ -110,8 +111,8 @@ void setup() {
     auto cfg = M5.config();
     cfg.serial_baudrate = 115200;
     cfg.led_brightness = 128;
-#if defined(HAMLET_CORE3SE)
-    // Configure the CoreS3 SE's ES7210 path without opening it. BathMic owns
+#if defined(HAMLET_CORE3SE) || HAMLET_TARGET_TAB5
+    // Configure the ES7210 path without opening it. BathMic owns
     // the actual begin/end lifecycle so no sound input exists outside the tub.
     cfg.internal_mic = true;
 #else
@@ -128,6 +129,9 @@ void setup() {
     cfg.output_power = true;
 
     M5.begin(cfg);
+#if HAMLET_TARGET_TAB5
+    Tab5Board::begin();
+#endif
 #if HAMLET_TARGET_CORES3SE
     const bool mBusPowerReady = ensureCoreS3SEMBusPower();
     Serial.printf("[POWER] CoreS3SE M-Bus 5V %s\n",

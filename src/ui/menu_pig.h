@@ -96,6 +96,13 @@ namespace MenuPig {
 
     void cleanupForModeExit();          // leaving MENU for a non-MENU mode
 
+    // Tab5 house-map compositor hooks. Room art is still drawn at 320x240.
+    void syncHouseAtmosphere(uint32_t now);
+    uint64_t houseTileKey(uint8_t room);
+    void drawRoomTile(M5Canvas& canvas, uint8_t room, uint32_t now, bool live);
+    void drawHouseOccupants(M5Canvas& world, uint32_t now);
+    void followRoom(uint8_t room);   // Tab5: walk toward a tapped room
+
     // Wardrive mode trigger (menu flow teleports to Room 3)
     void startWardriveEntry();
     bool isWDCinematicRunning();

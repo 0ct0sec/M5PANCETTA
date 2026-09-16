@@ -46,6 +46,8 @@
 #include "../audio/bath_mic.h"
 #include "npc/barman.h"
 #include "progression_text.h"
+#include "house_map.h"
+#include "../hal/platform.h"
 #include "../util/time_math.h"
 #include <esp_random.h>
 #include <math.h>
@@ -2348,6 +2350,31 @@ static int stationRoom(Station st) {
     return 0;
 }
 
+static Station defaultStationForRoom(int room) {
+    switch (room) {
+        case 0: return Station::AT_LAPTOP;
+        case 1: return Station::ON_SOFA;
+        case 2: return Station::COOKING;
+        case 3: return Station::AT_ANTENNA;
+        case 4: return Station::AT_BOOTH;
+        default: return Station::IN_BATH;
+    }
+}
+
+static void fillStationsForRoom(int room, Station skip, Station* candidates, int& n) {
+    auto add = [&](Station st) {
+        if (st != skip && n < 5) candidates[n++] = st;
+    };
+    switch (room) {
+        case 0: add(Station::AT_LAPTOP); break;
+        case 1: add(Station::ON_SOFA); add(Station::AT_WINDOW); break;
+        case 2: add(Station::COOKING); add(Station::IN_BED); break;
+        case 3: add(Station::AT_ANTENNA); add(Station::ON_LEDGE); break;
+        case 4: add(Station::AT_TERMINAL); add(Station::AT_BOOTH); break;
+        default: add(Station::IN_BATH); break;
+    }
+}
+
 static float bathApproachXFor(float fromX) {
     float bathCenterX = (float)(kR6_BathPigX + kPigW / 2);
     float pigCenterX = fromX + (float)kPigW * 0.5f;
@@ -2800,6 +2827,43 @@ static void beginWalkToTarget(uint32_t now) {
         // Room change — walk to screen edge
         walkFromX = pigX;
         walkFromY = pigY;
+#if HAMLET_TARGET_TAB5
+        const HouseMap::Dir dir = HouseMap::directionTo(
+            (uint8_t)currentRoom, (uint8_t)walkTargetRoom);
+        switch (dir) {
+            case HouseMap::Dir::Right:
+                walkToX = (float)SCREEN_WIDTH;
+                walkToY = (float)kFloorPigY;
+                roomSlideDir = 1;
+                break;
+            case HouseMap::Dir::Left:
+                walkToX = (float)-kPigW;
+                walkToY = (float)kFloorPigY;
+                roomSlideDir = -1;
+                break;
+            case HouseMap::Dir::Up:
+                walkToX = pigX;
+                walkToY = (float)(kRoomY - kPigH);
+                roomSlideDir = 1;
+                break;
+            case HouseMap::Dir::Down:
+                walkToX = pigX;
+                walkToY = (float)kFloorY;
+                roomSlideDir = -1;
+                break;
+            default:
+                walkToX = (float)SCREEN_WIDTH;
+                walkToY = (float)kFloorPigY;
+                roomSlideDir = 1;
+                break;
+        }
+        walkStart = now;
+        walkDurationMs = authoredWalkDuration(walkFromX, walkFromY,
+                                              walkToX, walkToY);
+        faceRight = (walkToX > walkFromX);
+        roamState = RoamState::WALKING_TO;
+        return;
+#endif
         if (walkTargetRoom == (currentRoom + 1) % NUM_ROOMS) {
             walkToX = (float)SCREEN_WIDTH;
             roomSlideDir = 1;
@@ -2863,83 +2927,43 @@ static void pickNextStation(uint32_t now) {
     Station candidates[5];
     int n = 0;
 
+#if HAMLET_TARGET_TAB5
+    int8_t adj[4];
+    int adjCount = 0;
+    const HouseMap::Dir dirs[4] = {
+        HouseMap::Dir::Left, HouseMap::Dir::Right,
+        HouseMap::Dir::Up, HouseMap::Dir::Down
+    };
+    for (HouseMap::Dir dir : dirs) {
+        const int8_t nb = HouseMap::neighbor((uint8_t)currentRoom, dir);
+        if (nb >= 0) adj[adjCount++] = nb;
+    }
+
+    if (changeRoom && adjCount > 0) {
+        fillStationsForRoom(adj[esp_random() % adjCount], currentStation,
+                            candidates, n);
+    } else {
+        fillStationsForRoom(currentRoom, currentStation, candidates, n);
+        if (n == 0 && adjCount > 0) {
+            fillStationsForRoom(adj[esp_random() % adjCount], currentStation,
+                                candidates, n);
+        }
+    }
+#else
     if (changeRoom) {
         // Pick a station elsewhere on the six-room circuit.
         int nextRoom = (currentRoom + 1 + (int)(esp_random() % (NUM_ROOMS - 1))) % NUM_ROOMS;
-        switch (nextRoom) {
-            case 0:
-                candidates[n++] = Station::AT_LAPTOP;
-                break;
-            case 1:
-                candidates[n++] = Station::ON_SOFA;
-                candidates[n++] = Station::AT_WINDOW;
-                break;
-            case 2:
-                candidates[n++] = Station::COOKING;
-                candidates[n++] = Station::IN_BED;
-                break;
-            case 3:
-                candidates[n++] = Station::AT_ANTENNA;
-                candidates[n++] = Station::ON_LEDGE;
-                break;
-            case 4:
-                candidates[n++] = Station::AT_TERMINAL;
-                candidates[n++] = Station::AT_BOOTH;
-                break;
-            case 5:
-                candidates[n++] = Station::IN_BATH;
-                break;
-        }
+        fillStationsForRoom(nextRoom, currentStation, candidates, n);
     } else {
         // Same room, different station
-        switch (currentRoom) {
-            case 0: {
-                // Only one station in room 0 — pick random other room (not just room 1)
-                int r0next = 1 + (int)(esp_random() % (NUM_ROOMS - 1));
-                switch (r0next) {
-                    case 1: candidates[n++] = Station::ON_SOFA;
-                            candidates[n++] = Station::AT_WINDOW; break;
-                    case 2: candidates[n++] = Station::COOKING;
-                            candidates[n++] = Station::IN_BED; break;
-                    case 3: candidates[n++] = Station::AT_ANTENNA;
-                            candidates[n++] = Station::ON_LEDGE; break;
-                    case 4: candidates[n++] = Station::AT_TERMINAL;
-                            candidates[n++] = Station::AT_BOOTH; break;
-                    default: candidates[n++] = Station::IN_BATH; break;
-                }
-                break;
-            }
-            case 1:
-                if (currentStation != Station::ON_SOFA) candidates[n++] = Station::ON_SOFA;
-                if (currentStation != Station::AT_WINDOW) candidates[n++] = Station::AT_WINDOW;
-                break;
-            case 2:
-                if (currentStation != Station::COOKING) candidates[n++] = Station::COOKING;
-                if (currentStation != Station::IN_BED) candidates[n++] = Station::IN_BED;
-                break;
-            case 3:
-                if (currentStation != Station::AT_ANTENNA) candidates[n++] = Station::AT_ANTENNA;
-                if (currentStation != Station::ON_LEDGE) candidates[n++] = Station::ON_LEDGE;
-                break;
-            case 4:
-                if (currentStation != Station::AT_TERMINAL) candidates[n++] = Station::AT_TERMINAL;
-                if (currentStation != Station::AT_BOOTH) candidates[n++] = Station::AT_BOOTH;
-                break;
-            case 5: {
-                // The bath is the balcony's only station. Send Pancetta back
-                // into the casework circuit instead of selecting himself.
-                int nextRoom = (int)(esp_random() % (NUM_ROOMS - 1));
-                switch (nextRoom) {
-                    case 0: candidates[n++] = Station::AT_LAPTOP; break;
-                    case 1: candidates[n++] = Station::ON_SOFA; break;
-                    case 2: candidates[n++] = Station::COOKING; break;
-                    case 3: candidates[n++] = Station::AT_ANTENNA; break;
-                    default: candidates[n++] = Station::AT_BOOTH; break;
-                }
-                break;
-            }
+        fillStationsForRoom(currentRoom, currentStation, candidates, n);
+        if (n == 0) {
+            // Single-station rooms (lab, bath) leave via the ring.
+            int r0next = (currentRoom + 1 + (int)(esp_random() % (NUM_ROOMS - 1))) % NUM_ROOMS;
+            fillStationsForRoom(r0next, currentStation, candidates, n);
         }
     }
+#endif
 
     if (n == 0) {
         candidates[n++] = Station::ON_SOFA;
@@ -3009,7 +3033,9 @@ static void pickNextStation(uint32_t now) {
     walkTargetStation = target;
     walkTargetRoom = targetRoom;
 
-    // Teleport path — dissolve from current pos, no dismount needed
+    // Teleport path — dissolve from current pos, no dismount needed.
+    // Tab5 walks through door edges; the wipe is Core-only.
+#if !HAMLET_TARGET_TAB5
     if (targetRoom != currentRoom &&
         currentStation != Station::IN_BATH &&
         target != Station::IN_BATH) {
@@ -3023,6 +3049,9 @@ static void pickNextStation(uint32_t now) {
             return;
         }
     }
+#else
+    useTeleportTransition = false;
+#endif
 
     // Walk path — dismount from elevated station first if needed
     bool needDismount = pigY < (float)kFloorPigY - 2.0f;
@@ -7254,6 +7283,15 @@ bool renderCaptureClip(M5Canvas& canvas, const char* clipId, uint32_t now,
 
 void startRoaming() {
     if (mode != PigMode::ON_BENCH) return;
+#if HAMLET_TARGET_TAB5
+    uint32_t now = millis();
+    mode = PigMode::ROAMING;
+    currentRoom = 0;
+    walkTargetRoom = 0;
+    walkTargetStation = Station::AT_LAPTOP;
+    arriveAtStation(now);
+    return;
+#endif
     mode = PigMode::LEAVING_BENCH;
     walkLegDist = 0.0f;
     transStart = millis();
@@ -7339,7 +7377,7 @@ uint8_t getCurrentStation() {
 }
 
 uint8_t getCurrentRoom() {
-    return (uint8_t)stationRoom(currentStation);
+    return (uint8_t)currentRoom;
 }
 
 void triggerPortalJump() {
@@ -7445,20 +7483,26 @@ void cycleRoom() {
         DefhogTerminal::hide();
     }
     int targetRoom = (currentRoom + 1) % NUM_ROOMS;
-    Station target;
-    switch (targetRoom) {
-        case 0: target = Station::AT_LAPTOP;  break;
-        case 1: target = Station::ON_SOFA;    break;
-        case 2: target = Station::COOKING;    break;
-        case 3: target = Station::AT_ANTENNA; break;
-        case 4: target = Station::AT_BOOTH; break;
-        default: target = Station::IN_BATH; break;
+#if HAMLET_TARGET_TAB5
+    static const uint8_t kHouseTour[NUM_ROOMS] = {3, 5, 1, 4, 2, 0};
+    int tourIdx = 0;
+    for (int i = 0; i < NUM_ROOMS; ++i) {
+        if (kHouseTour[i] == (uint8_t)currentRoom) {
+            tourIdx = i;
+            break;
+        }
     }
+    targetRoom = kHouseTour[(tourIdx + 1) % NUM_ROOMS];
+#endif
+    Station target = defaultStationForRoom(targetRoom);
     walkTargetStation = target;
     walkTargetRoom = targetRoom;
     useTeleportTransition = currentStation != Station::IN_BATH &&
                             target != Station::IN_BATH &&
                             ((esp_random() & 1) == 0);
+#if HAMLET_TARGET_TAB5
+    useTeleportTransition = false;
+#endif
     uint32_t now = millis();
 
     if (useTeleportTransition) {
@@ -7495,6 +7539,9 @@ void cycleRoom() {
                 roamState = RoamState::DISMOUNTING;
             }
         } else {
+#if HAMLET_TARGET_TAB5
+            beginWalkToTarget(now);
+#else
             walkFromX = pigX;
             walkFromY = pigY;
             walkToX = (float)SCREEN_WIDTH;
@@ -7507,6 +7554,7 @@ void cycleRoom() {
                                                   walkToX, walkToY);
             faceRight = true;
             roamState = RoamState::WALKING_TO;
+#endif
         }
     }
 }
@@ -7730,6 +7778,45 @@ void update(uint32_t now) {
                 walkLegDist = walkLegBaseDist + fabsf(walkToX - walkFromX);
                 // Check if this was an exit-room walk
                 if (walkTargetRoom != currentRoom) {
+#if HAMLET_TARGET_TAB5
+                    const HouseMap::Dir dir = HouseMap::directionTo(
+                        (uint8_t)currentRoom, (uint8_t)walkTargetRoom);
+                    currentRoom = walkTargetRoom;
+                    switch (dir) {
+                        case HouseMap::Dir::Right:
+                            pigX = 0.0f;
+                            pigY = (float)kFloorPigY;
+                            break;
+                        case HouseMap::Dir::Left:
+                            pigX = (float)(SCREEN_WIDTH - kPigW);
+                            pigY = (float)kFloorPigY;
+                            break;
+                        case HouseMap::Dir::Up:
+                            pigY = (float)kFloorPigY;
+                            break;
+                        case HouseMap::Dir::Down:
+                            pigY = (float)kRoomY;
+                            break;
+                        default:
+                            pigX = 0.0f;
+                            pigY = (float)kFloorPigY;
+                            break;
+                    }
+                    float stX, stY;
+                    bool stFR;
+                    getStationPos(walkTargetStation, stX, stY, stFR);
+                    walkFromX = pigX;
+                    walkFromY = pigY;
+                    walkToX = stationApproachX(walkTargetStation, pigX);
+                    walkToY = (stY < (float)kFloorPigY - 2.0f)
+                                  ? (float)kFloorPigY : stY;
+                    walkStart = now;
+                    walkDurationMs = authoredWalkDuration(walkFromX, walkFromY,
+                                                          walkToX, walkToY);
+                    walkLegBaseDist = walkLegDist;
+                    faceRight = (walkToX > walkFromX);
+                    roamState = RoamState::ENTERING_ROOM;
+#else
                     // Preserve contact phase across the doorway. The target
                     // room reveal owns the visual cut while Pancetta stays offstage.
                     walkLegBaseDist = walkLegDist;
@@ -7738,6 +7825,7 @@ void update(uint32_t now) {
                     transToRoom = walkTargetRoom;
                     roomTransStart = now;
                     currentRoom = walkTargetRoom;
+#endif
                 } else {
                     // Same room arrival — mount onto elevated station if needed
                     float stX, stY;
@@ -8206,6 +8294,11 @@ void drawHelper(M5Canvas& canvas, const char* description) {
 // ==[ ROOM DOORWAY REVEAL ]==
 
 static void drawRoomTransitionReveal(M5Canvas& canvas, uint32_t now) {
+#if HAMLET_TARGET_TAB5
+    (void)canvas;
+    (void)now;
+    return;
+#else
     if (roamState != RoamState::ROOM_TRANSITION ||
         teleportPhase != TeleportPhase::NONE) return;
 
@@ -8239,38 +8332,24 @@ static void drawRoomTransitionReveal(M5Canvas& canvas, uint32_t now) {
                                 bandH, RP::D_DEEP);
         }
     }
+#endif
 }
 
-// ==[ DRAW ROAMING ]==
+void syncHouseAtmosphere(uint32_t now) {
+    static uint32_t lastSync = 0;
+    if (lastSync == now) return;
+    lastSync = now;
 
-void drawRoaming(M5Canvas& canvas) {
     RP::update();
     calcParallax();
-    uint32_t now = debugRoamingFrame.active ? debugRoamingFrame.renderNow : millis();
-#ifdef HAMLET_FRAME_PROFILE
-    FrameBudget::setProfileRoom((uint8_t)currentRoom);
-#endif
     Barman::setRoomVisible(currentRoom == 4, now);
-    // Airborne smoke is the one effect allowed to outlive its emitter, so it
-    // gets integrated once per rendered frame ahead of every draw. A room cut
-    // is the only hard reset — smoke may not ride a teleport into the next set.
     SmokeFx::setScene(((uint32_t)currentRoom << 8) | (uint32_t)mode);
     SmokeFx::update(now);
-    // One storm, felt the same way everywhere. Thunder is the only signal in
-    // this build that every set already shares, so it is the cheapest way to
-    // make the rooms read as rooms in one building: the bar's cigarettes, the
-    // ramen steam and the bath columns all break on the same beat.
-    // Deliberately weaker than the bath cannonball — a pressure wave through
-    // the glass, not something in the room. Latched on the rising edge because
-    // Weather publishes a flag, not a flash timestamp.
     static SmokeFx::EdgeToken thunderEdge;
     if (const uint32_t tk =
             thunderEdge.sample(Weather::isThunderFlashing(), now)) {
         SmokeFx::gust(tk, 104u);
     }
-    // Same contract for the rooftop sky: an airship crossing is an event with
-    // a start and an end, so it needs a clock of its own and a hard cut on a
-    // room change. Cheap to tick from any room — it only schedules.
     SkyFx::setScene(((uint32_t)currentRoom << 8) | (uint32_t)mode);
     SkyFx::update(now);
     if (debugRoamingFrame.active) {
@@ -8281,6 +8360,93 @@ void drawRoaming(M5Canvas& canvas) {
         updateRoomMood();
         refreshRoomProgressVisuals(now);
     }
+}
+
+uint64_t houseTileKey(uint8_t room) {
+    const int saved = currentRoom;
+    currentRoom = (int)room;
+    const uint64_t key = currentRoomCacheKey();
+    currentRoom = saved;
+    return key;
+}
+
+void drawRoomTile(M5Canvas& canvas, uint8_t room, uint32_t now, bool live) {
+    const int saved = currentRoom;
+    currentRoom = (int)room;
+    if (!live) {
+        canvas.fillRect(0, UIMeasurements::kTopBarH, SCREEN_WIDTH,
+                        UIMeasurements::kScreenHeight - UIMeasurements::kTopBarH,
+                        RP::BG);
+        drawCurrentRoom(canvas, now, RoomRenderPass::BASE);
+    } else {
+        drawCurrentRoom(canvas, now, RoomRenderPass::LIVE);
+        drawRoomNoirPass(canvas, now);
+    }
+    currentRoom = saved;
+}
+
+void drawHouseOccupants(M5Canvas& world, uint32_t now) {
+    if (mode != PigMode::ROAMING && mode != PigMode::LEAVING_BENCH &&
+        mode != PigMode::RETURNING_TO_BENCH) {
+        return;
+    }
+    M5Canvas* tile = Display::getSharedCanvas();
+    if (!tile || !tile->getBuffer() || !world.getBuffer()) return;
+    drawRoaming(*tile);
+
+    const int tileW = SCREEN_WIDTH;
+    const int playY = UIMeasurements::kTopBarH;
+    const int playH = UIMeasurements::kMainAreaH;
+    const int dx0 = HouseMap::originX((uint8_t)currentRoom);
+    const int dy0 = HouseMap::originY((uint8_t)currentRoom);
+    const uint16_t* src = static_cast<const uint16_t*>(tile->getBuffer());
+    uint16_t* dst = static_cast<uint16_t*>(world.getBuffer());
+    const int dstW = world.width();
+    for (int row = 0; row < playH; ++row) {
+        memcpy(dst + (dy0 + playY + row) * dstW + dx0,
+               src + (playY + row) * tileW,
+               (size_t)tileW * sizeof(uint16_t));
+    }
+    (void)now;
+}
+
+void followRoom(uint8_t room) {
+#if !HAMLET_TARGET_TAB5
+    (void)room;
+    return;
+#else
+    if (room >= NUM_ROOMS) return;
+    if (mode == PigMode::ON_BENCH) startRoaming();
+    if (mode != PigMode::ROAMING) return;
+    if (roamState != RoamState::IDLE) return;
+    const uint8_t hop = HouseMap::nextHop((uint8_t)currentRoom, room);
+    if (hop == 0xFF || hop == (uint8_t)currentRoom) return;
+    walkTargetRoom = hop;
+    walkTargetStation = defaultStationForRoom(hop);
+    useTeleportTransition = false;
+    uint32_t now = millis();
+    bool needDismount = pigY < (float)kFloorPigY - 2.0f;
+    if (needDismount) {
+        jumpFromX = pigX;
+        jumpToX = pigX;
+        jumpFromY = pigY;
+        jumpToY = (float)kFloorPigY;
+        jumpStart = now;
+        roamState = RoamState::DISMOUNTING;
+    } else {
+        beginWalkToTarget(now);
+    }
+#endif
+}
+
+// ==[ DRAW ROAMING ]==
+
+void drawRoaming(M5Canvas& canvas) {
+    uint32_t now = debugRoamingFrame.active ? debugRoamingFrame.renderNow : millis();
+    syncHouseAtmosphere(now);
+#ifdef HAMLET_FRAME_PROFILE
+    FrameBudget::setProfileRoom((uint8_t)currentRoom);
+#endif
     uint16_t pigFg = Display::getColorFG();
     uint16_t pigBg = RP::BG;
     colorEvent = debugRoamingFrame.active ? ColorEventSample{} : sampleColorEvent(now);

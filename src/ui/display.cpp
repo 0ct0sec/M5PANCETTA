@@ -48,6 +48,7 @@
 #include "item_sprites.h"
 #include "frame_presenter.h"
 #include "scene_cache.h"
+#include "tab5_compositor.h"
 #include "ui_measurements.h"
 #include "lore_story.h"
 #include "../net/xfer_server.h"
@@ -882,6 +883,9 @@ void init() {
     canvas->setTextSize(1);
     FramePresenter::init();
     SceneCache::init();
+#if HAMLET_TARGET_TAB5
+    Tab5Compositor::init();
+#endif
 
     // brightness. percent to 0-255
     M5.Display.setBrightness(Config::getBrightness() * 255 / 100);
@@ -896,6 +900,11 @@ M5Canvas* getSharedCanvas() {
 
 void applyRotation() {
     FramePresenter::invalidate();
+#if HAMLET_TARGET_TAB5
+    // Physical DSI is 720x1280. Logical landscape is composed then rotated.
+    M5.Display.setRotation(0);
+    return;
+#endif
     uint8_t rotation = Config::getDisplayRotate180() ? 3 : 1;
     M5.Display.setRotation(rotation);
 }
@@ -2475,7 +2484,11 @@ static void drawBootIntroFrame(uint32_t now) {
             break;
     }
 
+#if HAMLET_TARGET_TAB5
+    FramePresenter::present(*canvas);
+#else
     canvas->pushSprite(0, 0);
+#endif
 }
 
 static void pumpBootIntroFrame() {
@@ -2568,6 +2581,14 @@ void finishBootIntro() {
 }
 
 void drawHoldOverlay() {
+#if HAMLET_TARGET_TAB5
+    holdRingDrawnOnCanvasFrame = false;
+    quickToastDrawnOnCanvasFrame = false;
+    helpOverlayDrawnOnCanvasFrame = false;
+    itemDropDrawnOnCanvasFrame = false;
+    xpNotifOnCanvas = false;
+    return;
+#endif
     // kept for sub-menu canvases that don't use pushCanvas()
     // draws directly to M5.Display after their pushSprite
     bool ringOnCanvas  = holdRingDrawnOnCanvasFrame;

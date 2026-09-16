@@ -9,6 +9,10 @@
 #include "soft_keyboard.h"
 #include "../input/cardkb.h"
 #include "display.h"
+#include "../hal/platform.h"
+#if HAMLET_TARGET_TAB5
+#include "tab5_compositor.h"
+#endif
 
 #include <ctype.h>
 #include <string.h>
@@ -241,19 +245,30 @@ void SoftKeyboard::update() {
     }
 
     auto td = M5.Touch.getDetail(0);
+    int16_t tx = td.x;
+    int16_t ty = td.y;
+#if HAMLET_TARGET_TAB5
+    uint8_t houseRoom = 0xFF;
+    Tab5Compositor::mapTouch(td.x, td.y, tx, ty, houseRoom);
+    if (houseRoom != 0xFF) {
+        // Keyboard lives in chrome; ignore house taps.
+        if (td.wasReleased()) touchActive = false;
+        return;
+    }
+#endif
 
     if (td.wasPressed()) {
         touchActive = true;
-        touchStartX = td.x;
-        touchStartY = td.y;
+        touchStartX = tx;
+        touchStartY = ty;
         touchStartMs = millis();
     }
 
     if (td.wasReleased() && touchActive) {
         touchActive = false;
         uint32_t dt = millis() - touchStartMs;
-        int16_t dx = td.x - touchStartX;
-        int16_t dy = td.y - touchStartY;
+        int16_t dx = tx - touchStartX;
+        int16_t dy = ty - touchStartY;
         int16_t dist = abs(dx) + abs(dy);
 
         if (dt < kTapMaxMs && dist < kTapMovePx) {

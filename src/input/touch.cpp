@@ -10,6 +10,10 @@
 #include "../piglet/pig_scene_common.h"
 #include "../ui/display.h"
 #include "../ui/ui_measurements.h"
+#include "../hal/platform.h"
+#if HAMLET_TARGET_TAB5
+#include "../ui/tab5_compositor.h"
+#endif
 #include <M5Unified.h>
 
 namespace Touch {
@@ -36,6 +40,8 @@ static bool gestureEmitted = false;
 // the idle avatar is the only pig this hitbox knows; every other scene draws
 // its own and must not have playfield taps stolen by a stale rect.
 static bool pigHitTestEnabled = true;
+static uint8_t houseRoom = 0xFF;
+static uint8_t houseRoomStart = 0xFF;
 
 // ==[ ZONE CLASSIFICATION ]==
 static Zone classifyZone(int16_t x, int16_t y) {
@@ -69,6 +75,9 @@ static void emitGesture(Gesture gesture, int16_t dx, int16_t dy) {
     currentEvent.dx = dx;
     currentEvent.dy = dy;
     currentEvent.active = true;
+#if HAMLET_TARGET_TAB5
+    houseRoom = houseRoomStart;
+#endif
 }
 
 // ==[ PUBLIC API ]==
@@ -80,33 +89,44 @@ void update(uint32_t now) {
     currentEvent.dx = 0;
     currentEvent.dy = 0;
     touchedThisFrame = false;
+    houseRoom = 0xFF;
 
     auto td = M5.Touch.getDetail(0);
+    int16_t x = td.x;
+    int16_t y = td.y;
+#if HAMLET_TARGET_TAB5
+    uint8_t mappedHouse = 0xFF;
+    Tab5Compositor::mapTouch(td.x, td.y, x, y, mappedHouse);
+#endif
 
     // display contact only; virtual button strip has its own input path.
-    if (td.isPressed() && td.y < DISPLAY_BOTTOM) {
+    if (td.isPressed() && y < DISPLAY_BOTTOM) {
         touchedThisFrame = true;
     }
 
     if (td.wasPressed()) {
-        if (td.y >= DISPLAY_BOTTOM) {
+        if (y >= DISPLAY_BOTTOM) {
             tracking = false;
             return;
         }
         tracking = true;
-        startX = td.x;
-        startY = td.y;
-        lastX = td.x;
-        lastY = td.y;
+        startX = x;
+        startY = y;
+        lastX = x;
+        lastY = y;
         startTime = now;
         gestureEmitted = false;
+#if HAMLET_TARGET_TAB5
+        houseRoomStart = mappedHouse;
+        houseRoom = houseRoomStart;
+#endif
         return;
     }
 
     // while held: swipe first, then long-press.
     if (tracking && td.isPressed() && !gestureEmitted) {
-        lastX = td.x;
-        lastY = td.y;
+        lastX = x;
+        lastY = y;
         int16_t dx = lastX - startX;
         int16_t dy = lastY - startY;
         int16_t absDx = abs16(dx);
@@ -134,6 +154,8 @@ void update(uint32_t now) {
 
         if (gestureEmitted) return;  // already fired while held
 
+        lastX = x;
+        lastY = y;
         int16_t dx = lastX - startX;
         int16_t dy = lastY - startY;
         int16_t absDx = abs16(dx);
@@ -164,6 +186,7 @@ void reset() {
     // clearing it here would yank the reference out from under the caller.
     tracking = false;
     gestureEmitted = false;
+    houseRoomStart = 0xFF;
 }
 
 const TouchEvent& getEvent() {
@@ -193,6 +216,10 @@ bool isTouchingPig(int16_t tx, int16_t ty) {
 
 bool wasTouched() {
     return touchedThisFrame;
+}
+
+uint8_t houseRoomHit() {
+    return houseRoom;
 }
 
 }  // namespace Touch

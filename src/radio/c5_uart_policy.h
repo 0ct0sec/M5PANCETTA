@@ -11,6 +11,11 @@ static constexpr bool DEFAULT_ENABLED = true;
 static constexpr uint8_t UART_NUM = 1;
 static constexpr uint8_t RX_PIN = 44;  // CoreS3 SE M-Bus RXD0
 static constexpr uint8_t TX_PIN = 43;  // CoreS3 SE M-Bus TXD0
+#elif HAMLET_TARGET_TAB5
+static constexpr bool DEFAULT_ENABLED = false;
+static constexpr uint8_t UART_NUM = 2;
+static constexpr uint8_t RX_PIN = 7;   // Tab5 Port.C
+static constexpr uint8_t TX_PIN = 8;
 #else
 static constexpr bool DEFAULT_ENABLED = false;
 static constexpr uint8_t UART_NUM = 2;

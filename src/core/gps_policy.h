@@ -34,6 +34,14 @@ static constexpr uint8_t RX_PINS[] = {44, 18,  7, 10};
 static constexpr uint8_t RX_DIPS[] = { 6,  7,  8, 10};
 static constexpr uint8_t TX_PINS[] = {17, 43};
 static constexpr uint8_t TX_DIPS[] = { 2,  1};
+#elif defined(HAMLET_TAB5) || defined(ARDUINO_M5STACK_TAB5)
+// Tab5 Grove: Port.C G7/G8 UART, Port.B G5/G6. No M003 DIP map; expose both.
+static constexpr uint8_t DEFAULT_RX_PIN = 7;
+static constexpr uint8_t DEFAULT_TX_PIN = 8;
+static constexpr uint8_t RX_PINS[] = {7, 5};
+static constexpr uint8_t RX_DIPS[] = {0, 0};
+static constexpr uint8_t TX_PINS[] = {8, 6};
+static constexpr uint8_t TX_DIPS[] = {0, 0};
 #else
 // Core2 (and native host test): DIP number is a contiguous offset per side.
 static constexpr uint8_t DEFAULT_RX_PIN = 34;       // DIP 9: Core2 RX <- GNSS TX
