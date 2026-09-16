@@ -28,7 +28,9 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
+#if defined(RECON_BLE_SUPPORT) && RECON_BLE_SUPPORT
 #include <NimBLEDevice.h>
+#endif
 #include "../core/power.h"
 #include "../defense/ble_chaff.h"
 #endif
@@ -353,6 +355,7 @@ static void sendExportSnapshot(uint32_t now) {
 }
 
 #ifndef NATIVE_TEST
+#if defined(RECON_BLE_SUPPORT) && RECON_BLE_SUPPORT
 static bool bleHeartbeatOwnsAdvertising = false;
 
 static void stopBleHeartbeat() {
@@ -406,6 +409,10 @@ static void updateBleHeartbeat(uint32_t now) {
     pAdv->start(0);
     bleHeartbeatOwnsAdvertising = true;
 }
+#else
+static void stopBleHeartbeat() {}
+static void updateBleHeartbeat(uint32_t) {}
+#endif
 #else
 static void stopBleHeartbeat() {}
 static void updateBleHeartbeat(uint32_t) {}
